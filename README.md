@@ -48,13 +48,35 @@ cp .env.example .env.local  # defaults already point at localhost:3001
 npm run dev                 # → http://localhost:3000
 ```
 
-Leave the three blockchain variables in `backend/.env` empty and the app runs
-in **OFF_CHAIN** mode: register, vote, live results and every error path
-(400 / 401 / 404 / 409) all work against PostgreSQL alone.
+### The dashboard says "off-chain" — is something wrong?
 
-To exercise the on-chain path, follow [§3.2](#32-smart-contract-sepolia) with
-your own Sepolia wallet — or simply compare the numbers shown in the dashboard
-against the live contract linked above.
+No. On a fresh clone the three blockchain variables in `backend/.env` are
+empty (a private key must never be committed), so the backend logs
+`Blockchain disabled … OFF_CHAIN` and stores votes in PostgreSQL only.
+Register, vote, live results and every error path (400 / 401 / 404 / 409)
+all work in this mode. **You do not need to run anything in `contracts/`** —
+that folder only deploys the contract once; the contract is already live on
+Sepolia at the address above.
+
+### Turning on-chain mode on
+
+Set these three in `backend/.env` and restart the backend:
+
+```ini
+RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+BACKEND_WALLET_PRIVATE_KEY=0x…   # 66 chars; the wallet that owns the contract
+VOTING_CONTRACT_ADDRESS=0x…
+```
+
+The log should then read `Connected to sepolia (chainId 11155111)` and the
+badge flips to **on-chain**.
+
+* **Project owner:** copy the two values from your existing `.env`.
+* **Anyone else:** the owner's key is private, so deploy your own copy of the
+  contract with your own Sepolia wallet — three commands in
+  [§3.2](#32-smart-contract-sepolia) — and use that address. Or skip it and
+  just verify the live contract on Etherscan / with the "อ่านจาก chain"
+  button, which needs no key at all.
 
 Secrets are never committed: only `.env.example` files are in the repo.
 
