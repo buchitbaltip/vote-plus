@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# builds
+**/dist/
+**/.next/
+*.tsbuildinfo
+
+# secrets
+.env
+.env.local
+.env.*.local
+
+# misc
+coverage/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,17 @@
+{
+  "name": "vote-plus-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Solidity contract + compile/deploy scripts for Vote Plus (Sepolia testnet)",
+  "scripts": {
+    "compile": "node scripts/compile.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "read": "node scripts/read.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0",
+    "solc": "^0.8.28"
+  }
+}

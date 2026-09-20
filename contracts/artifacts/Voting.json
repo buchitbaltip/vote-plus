@@ -1,0 +1,144 @@
+{
+  "contractName": "Voting",
+  "compiler": "solc 0.8.37+commit.f401782d.Emscripten.clang",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_candidateCount",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "candidateId",
+          "type": "uint256"
+        }
+      ],
+      "name": "InvalidCandidate",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotOwner",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "candidateId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "newTotal",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "totalVotes",
+          "type": "uint256"
+        }
+      ],
+      "name": "Voted",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "candidateCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getVotes",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "result",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "candidateId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getVotes",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalVotes",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "candidateId",
+          "type": "uint256"
+        }
+      ],
+      "name": "vote",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60c060405234801561000f575f5ffd5b5060405161053f38038061053f83398101604081905261002e9161008d565b5f81116100815760405162461bcd60e51b815260206004820152601a60248201527f63616e646964617465436f756e74206d757374206265203e2030000000000000604482015260640160405180910390fd5b3360805260a0526100a4565b5f6020828403121561009d575f5ffd5b5051919050565b60805160a0516104596100e65f395f818160ee015281816101760152818161024c015281816102b3015261032801525f818160af015261012e01526104595ff3fe608060405234801561000f575f5ffd5b5060043610610060575f3560e01c80630121b93f146100645780630d15fd77146100795780630dc96015146100955780638da5cb5b146100aa578063a9a981a3146100e9578063ff98109914610110575b5f5ffd5b61007761007236600461037d565b610123565b005b61008260015481565b6040519081526020015b60405180910390f35b61009d610248565b60405161008c9190610394565b6100d17f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b03909116815260200161008c565b6100827f000000000000000000000000000000000000000000000000000000000000000081565b61008261011e36600461037d565b61031d565b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461016c576040516330cd747160e01b815260040160405180910390fd5b80158061019857507f000000000000000000000000000000000000000000000000000000000000000081115b156101be57604051630b81c1a160e21b8152600481018290526024015b60405180910390fd5b5f8181526020819052604081208054600192906101dc9084906103d6565b925050819055506001805f8282546101f491906103d6565b90915550505f81815260208181526040918290205460015483519182529181019190915282917f5fe8f1cc066896edbe87bedf2e870c54f6311a7d6668c860949e2e1224a0955e910160405180910390a250565b60607f000000000000000000000000000000000000000000000000000000000000000067ffffffffffffffff811115610283576102836103fb565b6040519080825280602002602001820160405280156102ac578160200160208202803683370190505b5090505f5b7f0000000000000000000000000000000000000000000000000000000000000000811015610319575f806102e68360016103d6565b81526020019081526020015f20548282815181106103065761030661040f565b60209081029190910101526001016102b1565b5090565b5f81158061034a57507f000000000000000000000000000000000000000000000000000000000000000082115b1561036b57604051630b81c1a160e21b8152600481018390526024016101b5565b505f9081526020819052604090205490565b5f6020828403121561038d575f5ffd5b5035919050565b602080825282518282018190525f918401906040840190835b818110156103cb5783518352602093840193909201916001016103ad565b509095945050505050565b808201808211156103f557634e487b7160e01b5f52601160045260245ffd5b92915050565b634e487b7160e01b5f52604160045260245ffd5b634e487b7160e01b5f52603260045260245ffdfea2646970667358221220f0f773b50e00df5bb56dbcc9a334cf79f89f2378b36f9434a86041cc702f922264736f6c63430008250033",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.37+commit.f401782d\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"_candidateCount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"candidateId\",\"type\":\"uint256\"}],\"name\":\"InvalidCandidate\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotOwner\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"candidateId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"newTotal\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"totalVotes\",\"type\":\"uint256\"}],\"name\":\"Voted\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"candidateCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getVotes\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"result\",\"type\":\"uint256[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"candidateId\",\"type\":\"uint256\"}],\"name\":\"getVotes\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalVotes\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"candidateId\",\"type\":\"uint256\"}],\"name\":\"vote\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"title\":\"Voting\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{\"getVotes()\":{\"notice\":\"Raw tally for every candidate. Index 0 => candidate #1.\"},\"getVotes(uint256)\":{\"notice\":\"Tally for a single candidate.\"},\"vote(uint256)\":{\"notice\":\"Add one vote to `candidateId`. Called by the backend after it         has validated the student's ballot.\"}},\"notice\":\"On-chain tally for a student-president election. Design:  - Vote counts live in contract storage. Nobody (not even the owner) can    set a count directly; the only way to change state is `vote()`, which    can only ever *increment* a counter by one.  - `vote()` is restricted to the owner (the NestJS backend wallet). The    backend is responsible for authenticating the student and enforcing    one-vote-per-student in PostgreSQL; the chain provides an immutable,    publicly auditable tally.  - `getVotes()` is a free `view` call so anyone (the backend, a browser,    an interviewer on Etherscan) can read the raw tally without trusting    the backend.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"Voting.sol\":\"Voting\"},\"evmVersion\":\"osaka\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"Voting.sol\":{\"keccak256\":\"0x45e51b634a93773a0c52e8dd2171d322fab2405cd15531e9b782dd675dd16423\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://b3a6c1f7c141d9388bef6f7870e545c8b6ac56ce7e830dae1970c028fa294887\",\"dweb:/ipfs/QmSQQ81qbkboojCjBmk3Ettg5vtvuuRL6VJKVHtZFdAQny\"]}},\"version\":1}"
+}
