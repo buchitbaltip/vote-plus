@@ -19,18 +19,31 @@ trusting the server.
 
 ## Quick start (5 minutes, no wallet needed)
 
-```bash
-git clone <this repo> && cd "Vote Plus"
+Prerequisites: Node.js ≥ 20 and a running PostgreSQL with an empty database
+(`CREATE DATABASE vote_plus;` — tables are created automatically on first start).
 
-# 1. Backend — needs a PostgreSQL database (any local or cloud instance)
+**Terminal 1 — backend** (run from the repo root)
+
+```bash
 cd backend
 npm install
-cp .env.example .env        # set DB_* (or DATABASE_URL) and any JWT_SECRET
-npm run start:dev           # → http://localhost:3001  (log: "Seeded 5 candidates")
+cp .env.example .env
+```
 
-# 2. Frontend (new terminal)
-cd ../frontend
-npm install
+Open `backend/.env` and fill in the `DB_*` block for your PostgreSQL
+(host, port, user, password, database) and any value for `JWT_SECRET`.
+If you prefer a single connection string, comment out the `DB_*` lines and
+set `DATABASE_URL` instead — `DATABASE_URL` wins when both are present.
+
+```bash
+npm run start:dev           # → http://localhost:3001  (log: "Seeded 5 candidates")
+```
+
+**Terminal 2 — frontend** (open a *new* terminal, again from the repo root)
+
+```bash
+cd frontend
+npm install                 # don't skip — installs next
 cp .env.example .env.local  # defaults already point at localhost:3001
 npm run dev                 # → http://localhost:3000
 ```
