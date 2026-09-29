@@ -1,0 +1,116 @@
+# รันทั้งระบบด้วยคำสั่งเดียว:  docker compose up -d
+#
+# ทุก service อยู่ใน network เดียวกันที่ Docker สร้างให้อัตโนมัติ และเรียกหากัน
+# ด้วย "ชื่อ service" เป็น hostname เช่น postgres:5432, rabbitmq:5672
+# (ใช้ localhost ไม่ได้ เพราะใน container คำว่า localhost = ตัว container เอง)
+
+services:
+  # ---------------------------------------------------------------
+  # ฐานข้อมูล — เก็บ users, candidates, votes
+  # ---------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: vote-plus-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: vote
+      POSTGRES_DB: vote_plus
+    ports:
+      # เปิดออกมาที่ 5433 เพื่อไม่ชนกับ PostgreSQL ที่ติดตั้งในเครื่อง (5432)
+      - '5433:5432'
+    volumes:
+      # named volume — ข้อมูลไม่หายเมื่อ container ถูกลบ
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d vote_plus']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------
+  # ตัวกลางรับส่งข้อความระหว่าง voting-service กับ blockchain-worker
+  # ---------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: vote-plus-rabbitmq
+    ports:
+      # AMQP: protocol ของ RabbitMQ (ไม่ใช่ HTTP)
+      - '5672:5672'
+      # หน้าเว็บจัดการ: http://localhost:15672 (vote / vote)
+      - '15672:15672'
+    environment:
+      # บัญชี guest ที่ติดมากับ image ต่อได้จากใน container เท่านั้น
+      # จึงต้องสร้างบัญชีเองเพื่อให้ต่อจากข้างนอกได้
+      RABBITMQ_DEFAULT_USER: vote
+      RABBITMQ_DEFAULT_PASS: vote
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------
+  # API หลัก — auth, ผู้สมัคร, บัตรลงคะแนน, ผลคะแนน (SSE)
+  # scale ได้ เพราะไม่มี private key และไม่ถือ nonce
+  # ---------------------------------------------------------------
+  voting-service:
+    build: ./voting-service
+    container_name: vote-plus-voting
+    ports:
+      - '3001:3001'
+    env_file:
+      # ค่าลับ (JWT_SECRET ฯลฯ) มาจากไฟล์ ไม่เขียนลง compose ที่ขึ้น git
+      - ./voting-service/.env
+    environment:
+      # override ค่าที่ชี้ไป localhost ใน .env ให้ชี้ไปที่ container แทน
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: vote
+      DB_NAME: vote_plus
+      RABBITMQ_URL: amqp://vote:vote@rabbitmq:5672
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      # รอจน healthcheck ผ่านจริง ไม่ใช่แค่ container เริ่มทำงาน
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------
+  # Worker — ตัวเดียวที่ถือ private key และเขียนลง smart contract
+  # ห้าม scale เกิน 1 เพราะทุก transaction ใช้ nonce ชุดเดียวกัน
+  # ---------------------------------------------------------------
+  blockchain-worker:
+    build: ./blockchain-worker
+    container_name: vote-plus-worker
+    env_file:
+      - ./blockchain-worker/.env
+    environment:
+      RABBITMQ_URL: amqp://vote:vote@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # ไม่มี ports เลย — worker ไม่เปิดช่องทางให้ใครเรียกเข้ามาได้
+    # ซึ่งเป็นเหตุผลด้านความปลอดภัยที่เก็บ private key ไว้ที่นี่
+
+  # ---------------------------------------------------------------
+  # หน้าเว็บ
+  # ---------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # เบราว์เซอร์อยู่นอก Docker จึงต้องเรียกผ่าน port ที่ publish ออกมา
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+    container_name: vote-plus-frontend
+    ports:
+      - '3000:3000'
+    depends_on:
+      - voting-service
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

@@ -1,13 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Contract,
-  JsonRpcProvider,
-  NonceManager,
-  Wallet,
-  type ContractTransactionResponse,
-  type TransactionReceipt,
-} from 'ethers';
+import { Contract, JsonRpcProvider } from 'ethers';
 import { VOTING_ABI } from './voting.abi.js';
 
 export interface ChainInfo {
@@ -19,36 +12,28 @@ export interface ChainInfo {
   explorerUrl: string;
 }
 
-export interface SubmittedVote {
-  txHash: string;
-  /** Resolves when the tx is mined (or rejects if it reverts / is dropped). */
-  confirmation: Promise<TransactionReceipt>;
-}
-
 const TALLY_CACHE_MS = 5_000;
 
 /**
- * Thin wrapper around the Voting contract.
+ * ตัวอ่าน chain แบบ read-only
  *
- * If RPC_URL / BACKEND_WALLET_PRIVATE_KEY / VOTING_CONTRACT_ADDRESS are not
- * set, the service reports `enabled: false` and VotesService records votes
- * as OFF_CHAIN. That keeps the app runnable for local development without a
- * funded testnet wallet.
+ * service นี้ "ไม่มี" private key เลย มันทำได้แค่เรียก view function อย่าง
+ * getVotes() กับ owner() ซึ่งเป็นการอ่านที่ใครก็เรียกได้ฟรี ไม่ต้องเซ็น
+ * ไม่เสีย gas
+ *
+ * การเขียนลง contract ทั้งหมดอยู่ที่ blockchain-worker ที่เดียว แปลว่าต่อให้
+ * ใครเจาะเข้ามาที่ service นี้ได้ ก็ยังแก้คะแนนบน chain ไม่ได้อยู่ดี
  */
 @Injectable()
 export class BlockchainService implements OnModuleInit {
   private readonly logger = new Logger(BlockchainService.name);
 
   private provider?: JsonRpcProvider;
-  private wallet?: Wallet;
   private contract?: Contract;
   private chainId: number | null = null;
   private networkName: string | null = null;
-
-  // Serialise sends so two students voting at the same second never race
-  // for the same nonce. NonceManager tracks nonces locally; the queue keeps
-  // the sends ordered.
-  private sendQueue: Promise<unknown> = Promise.resolve();
+  /** address ของ owner อ่านมาจาก contract ตอน boot ไม่ได้มาจาก key ในเครื่อง */
+  private ownerAddress: string | null = null;
 
   private tallyCache?: { at: number; value: number[] };
 
@@ -63,47 +48,40 @@ export class BlockchainService implements OnModuleInit {
   }
 
   get explorerUrl(): string {
-    return this.config.get<string>('EXPLORER_URL', 'https://sepolia.etherscan.io');
+    return this.config.get<string>(
+      'EXPLORER_URL',
+      'https://sepolia.etherscan.io',
+    );
   }
 
   async onModuleInit() {
     const rpcUrl = this.config.get<string>('RPC_URL');
-    const privateKey = this.config.get<string>('BACKEND_WALLET_PRIVATE_KEY');
     const address = this.contractAddress;
 
-    if (!rpcUrl || !privateKey || !address) {
+    // ต้องการแค่ 2 ค่า ไม่ต้องใช้ private key เพราะอ่านอย่างเดียว
+    if (!rpcUrl || !address) {
       this.logger.warn(
-        'Blockchain disabled: set RPC_URL, BACKEND_WALLET_PRIVATE_KEY and VOTING_CONTRACT_ADDRESS to enable. Votes will be recorded OFF_CHAIN.',
+        'อ่าน chain ไม่ได้: ยังไม่ได้ตั้ง RPC_URL หรือ VOTING_CONTRACT_ADDRESS — คะแนนบน chain จะไม่แสดง',
       );
       return;
     }
 
     try {
       this.provider = new JsonRpcProvider(rpcUrl);
-      this.wallet = new Wallet(privateKey, this.provider);
-      const signer = new NonceManager(this.wallet);
-      this.contract = new Contract(address, VOTING_ABI, signer);
+      this.contract = new Contract(address, VOTING_ABI, this.provider);
 
       const network = await this.provider.getNetwork();
       this.chainId = Number(network.chainId);
       this.networkName = network.name;
+      this.ownerAddress = (await this.contract.owner()) as string;
 
-      // Sanity checks so misconfiguration is obvious at boot, not at first vote.
-      const owner: string = await this.contract.owner();
-      if (owner.toLowerCase() !== this.wallet.address.toLowerCase()) {
-        this.logger.error(
-          `Backend wallet ${this.wallet.address} is NOT the contract owner (${owner}). vote() calls will revert.`,
-        );
-      }
       const count = Number(await this.contract.candidateCount());
       this.logger.log(
-        `Connected to ${this.networkName} (chainId ${this.chainId}). Contract ${address}, ${count} candidates, wallet ${this.wallet.address}`,
+        `อ่าน ${this.networkName} (chainId ${this.chainId}) ได้ — contract ${address}, ผู้สมัคร ${count} คน, owner ${this.ownerAddress}`,
       );
     } catch (err) {
       this.contract = undefined;
-      this.logger.error(
-        `Failed to connect to blockchain, falling back to OFF_CHAIN: ${(err as Error).message}`,
-      );
+      this.logger.error(`ต่อ chain ไม่สำเร็จ: ${(err as Error).message}`);
     }
   }
 
@@ -113,53 +91,29 @@ export class BlockchainService implements OnModuleInit {
       chainId: this.chainId,
       networkName: this.networkName,
       contractAddress: this.enabled ? this.contractAddress : null,
-      backendWallet: this.wallet?.address ?? null,
+      backendWallet: this.ownerAddress,
       explorerUrl: this.explorerUrl,
     };
   }
 
-  /**
-   * Submit `vote(candidateNumber)`; resolves as soon as the tx is accepted
-   * by the node (hash known). Mining is awaited via `confirmation`.
-   */
-  castVote(candidateNumber: number): Promise<SubmittedVote> {
-    if (!this.contract) {
-      throw new Error('Blockchain is not enabled');
-    }
-    const contract = this.contract;
-
-    const run = this.sendQueue.then(async () => {
-      const tx: ContractTransactionResponse = await contract.vote(candidateNumber);
-      this.logger.log(`vote(${candidateNumber}) submitted: ${tx.hash}`);
-      this.tallyCache = undefined;
-      const confirmation = tx.wait().then((receipt) => {
-        if (!receipt || receipt.status !== 1) {
-          throw new Error(`Transaction ${tx.hash} reverted`);
-        }
-        this.logger.log(`vote(${candidateNumber}) mined in block ${receipt.blockNumber}`);
-        this.tallyCache = undefined;
-        return receipt;
-      });
-      return { txHash: tx.hash, confirmation } satisfies SubmittedVote;
-    });
-
-    // Keep the queue alive even if this send fails.
-    this.sendQueue = run.catch(() => undefined);
-    return run;
-  }
-
-  /** Raw tally straight from the contract (`getVotes()`), cached briefly. */
+  /** คะแนนดิบจาก contract โดยตรง (`getVotes()`) แคชไว้สั้น ๆ */
   async getVotes(): Promise<number[]> {
     if (!this.contract) {
-      throw new Error('Blockchain is not enabled');
+      throw new Error('ยังไม่ได้ตั้งค่า chain');
     }
     const now = Date.now();
     if (this.tallyCache && now - this.tallyCache.at < TALLY_CACHE_MS) {
       return this.tallyCache.value;
     }
+    // แคช 5 วินาที กันไม่ให้ทุก SSE connection ยิง RPC พร้อมกันรัว ๆ
     const raw: bigint[] = await this.contract['getVotes()']();
     const value = raw.map((v) => Number(v));
     this.tallyCache = { at: now, value };
     return value;
+  }
+
+  /** ล้างแคชเมื่อรู้ว่าคะแนนบน chain เพิ่งเปลี่ยน (worker แจ้งมา) */
+  invalidateTallyCache() {
+    this.tallyCache = undefined;
   }
 }

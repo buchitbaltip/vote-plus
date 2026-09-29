@@ -14,9 +14,9 @@ import {
 } from 'class-validator';
 
 /**
- * Environment variables are validated once at startup with the same
- * class-validator approach used for request DTOs. A typo in .env fails fast
- * with a readable message instead of a confusing runtime error later.
+ * ตรวจ environment variable ครั้งเดียวตอน start ด้วย class-validator ตัวเดียว
+ * กับที่ใช้ตรวจ DTO ของ request ถ้าพิมพ์ผิดใน .env จะพังทันทีพร้อมข้อความที่
+ * อ่านรู้เรื่อง แทนที่จะไปพังแบบงง ๆ ตอน runtime ทีหลัง
  */
 export class EnvironmentVariables {
   @IsOptional()
@@ -31,8 +31,8 @@ export class EnvironmentVariables {
   CORS_ORIGIN = 'http://localhost:3000';
 
   // --- PostgreSQL ---
-  // Either a single DATABASE_URL (Neon / Supabase / Railway give you one)
-  // or the individual DB_* fields for a local server.
+  // เลือกอย่างใดอย่างหนึ่ง: DATABASE_URL เส้นเดียว (Neon / Supabase / Railway
+  // ให้มาแบบนี้) หรือใส่ DB_* ทีละตัวสำหรับ server ในเครื่อง
   @ValidateIf((o) => !o.DB_HOST)
   @IsString()
   @Matches(/^postgres(ql)?:\/\//, {
@@ -55,7 +55,7 @@ export class EnvironmentVariables {
   @IsString()
   DB_USER?: string;
 
-  // May be empty for local trust auth
+  // ว่างได้ ถ้า Postgres ในเครื่องตั้งเป็น trust auth
   @IsOptional()
   @IsString()
   DB_PASSWORD?: string = '';
@@ -64,7 +64,7 @@ export class EnvironmentVariables {
   @IsString()
   DB_NAME?: string;
 
-  /** Force TLS (cloud providers). Auto-enabled when DATABASE_URL has sslmode=require. */
+  /** บังคับใช้ TLS (สำหรับ cloud) เปิดให้อัตโนมัติถ้า DATABASE_URL มี sslmode=require */
   @IsOptional()
   @IsBooleanString()
   DB_SSL?: string;
@@ -78,16 +78,17 @@ export class EnvironmentVariables {
   @IsString()
   JWT_EXPIRES_IN = '1d';
 
-  // --- Blockchain (all optional: app runs in OFF_CHAIN mode without them) ---
+  // --- Message broker ---
+  @IsOptional()
+  @IsString()
+  RABBITMQ_URL = 'amqp://localhost:5672';
+
+  // --- Blockchain (อ่านอย่างเดียว) ---
+  // ไม่มี BACKEND_WALLET_PRIVATE_KEY ที่นี่แล้ว — key ย้ายไปอยู่ที่
+  // blockchain-worker ที่เดียว service นี้จึงเขียนลง chain ไม่ได้เลย
   @IsOptional()
   @IsUrl({ require_tld: false })
   RPC_URL?: string;
-
-  @IsOptional()
-  @Matches(/^0x[0-9a-fA-F]{64}$/, {
-    message: 'BACKEND_WALLET_PRIVATE_KEY must be a 0x-prefixed 32-byte hex key',
-  })
-  BACKEND_WALLET_PRIVATE_KEY?: string;
 
   @IsOptional()
   @Matches(/^0x[0-9a-fA-F]{40}$/, {
@@ -101,8 +102,8 @@ export class EnvironmentVariables {
 }
 
 export function validateEnv(config: Record<string, unknown>) {
-  // Treat blank values (e.g. `VOTING_CONTRACT_ADDRESS=`) as unset so
-  // optional settings can be left empty in .env.
+  // ค่าที่เป็นสตริงว่าง (เช่น `VOTING_CONTRACT_ADDRESS=`) ให้ถือว่าไม่ได้ตั้ง
+  // เพื่อให้ปล่อยค่า optional ว่างไว้ใน .env ได้
   const cleaned = Object.fromEntries(
     Object.entries(config).filter(([, v]) => v !== ''),
   );

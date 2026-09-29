@@ -11,16 +11,15 @@ import {
 import { VOTING_ABI } from './voting.abi.js';
 
 /**
- * The only component in the whole system that can write to the contract.
+ * ตัวเดียวในระบบทั้งหมดที่เขียนลง contract ได้
  *
- * It holds the wallet private key, which is why this process is kept separate
- * from the API: voting-service can read the chain but can never spend gas or
- * change the tally.
+ * มันถือ private key ของ wallet ซึ่งเป็นเหตุผลที่แยก process นี้ออกจาก API —
+ * voting-service อ่าน chain ได้ แต่ไม่มีวันจ่าย gas หรือแก้คะแนนได้เลย
  *
- * This process must run as a SINGLE instance. Every transaction is signed by
- * the same wallet, and a wallet has one nonce sequence — two workers sending
- * at once would collide. `sendQueue` serialises sends within the process;
- * running one replica keeps that guarantee across the cluster.
+ * process นี้ต้องรันแค่ instance เดียวเท่านั้น เพราะทุก transaction เซ็นด้วย
+ * wallet เดียวกัน และ wallet หนึ่งมี nonce ชุดเดียว ถ้ามี worker 2 ตัวส่ง
+ * พร้อมกันจะชนกัน — `sendQueue` เรียงคิวการส่งภายใน process ส่วนการรัน
+ * replica เดียวคือสิ่งที่รักษาการันตีนี้ในระดับ cluster
  */
 @Injectable()
 export class BlockchainService implements OnModuleInit {
@@ -61,7 +60,7 @@ export class BlockchainService implements OnModuleInit {
 
       const network = await this.provider.getNetwork();
 
-      // Fail loudly at boot rather than on the first vote.
+      // ให้พังตั้งแต่ตอน boot ดีกว่าไปพังตอนมีคนโหวตครั้งแรก
       const owner: string = await this.contract.owner();
       if (owner.toLowerCase() !== this.wallet.address.toLowerCase()) {
         this.logger.error(
@@ -81,11 +80,11 @@ export class BlockchainService implements OnModuleInit {
   }
 
   /**
-   * Submits `vote(candidateNumber)` and waits until it is mined.
+   * ส่ง `vote(candidateNumber)` แล้วรอจนกว่าจะถูก mine
    *
-   * Unlike the old in-process version, waiting here is free: nobody is holding
-   * an HTTP request open, and if this process dies the message is still in the
-   * queue and will be retried.
+   * ต่างจากเวอร์ชันเดิมที่อยู่ใน API ตรงที่การรอตรงนี้ไม่เสียอะไรเลย — ไม่มีใคร
+   * ค้าง HTTP request รออยู่ และถ้า process นี้ตาย ข้อความยังอยู่ในคิว
+   * เดี๋ยวก็ถูกส่งมาให้ทำใหม่
    */
   async castVote(candidateNumber: number): Promise<TransactionReceipt> {
     if (!this.contract) {
@@ -108,7 +107,7 @@ export class BlockchainService implements OnModuleInit {
       return receipt;
     });
 
-    // Keep the queue moving even if this send fails.
+    // ต่อคิวไว้ ถ้าการส่งครั้งนี้ล้มก็ไม่ทำให้คิวค้าง
     this.sendQueue = run.catch(() => undefined);
     return run;
   }

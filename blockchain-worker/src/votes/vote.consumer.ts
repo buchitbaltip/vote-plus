@@ -15,8 +15,8 @@ import {
 } from '../events/vote.events.js';
 
 /**
- * Entry point of this service. It plays the same role a controller does in an
- * HTTP app, except requests arrive from a queue instead of a socket.
+ * ประตูทางเข้าของ service นี้ ทำหน้าที่เหมือน controller ในแอป HTTP
+ * ต่างกันแค่ว่า "request" มาจากคิวแทนที่จะมาจาก socket
  */
 @Controller()
 export class VoteConsumer {
@@ -30,8 +30,8 @@ export class VoteConsumer {
   @EventPattern(VOTE_CREATED)
   async handleVoteCreated(
     @Payload() event: VoteCreatedEvent,
-    // Nest types extra handler arguments as `unknown`, so the context is
-    // narrowed here instead of in the signature.
+    // Nest ประกาศ argument ตัวที่เหลือของ handler เป็น `unknown`
+    // จึงมา narrow type ตรงนี้แทนที่จะใส่ใน signature
     @Ctx() ctx: unknown,
   ) {
     const context = ctx as RmqContext;
@@ -51,8 +51,8 @@ export class VoteConsumer {
         blockNumber: receipt.blockNumber,
       });
 
-      // Only now is the work really done, so only now is the message removed
-      // from the queue. A crash before this line means RabbitMQ redelivers it.
+      // ถึงตรงนี้งานถึงจะเสร็จจริง ข้อความจึงเพิ่งถูกลบออกจากคิวตอนนี้
+      // ถ้า process ตายก่อนบรรทัดนี้ RabbitMQ จะส่งข้อความกลับมาให้ทำใหม่
       channel.ack(message);
     } catch (err) {
       const reason = (err as Error).message;
@@ -60,8 +60,8 @@ export class VoteConsumer {
 
       this.client.emit(VOTE_FAILED, { voteId: event.voteId, reason });
 
-      // requeue=false: do not spin on a message that keeps failing. With a
-      // dead-letter exchange configured it lands in the DLQ for inspection.
+      // requeue=false: ไม่วนทำข้อความที่ล้มซ้ำ ๆ ไม่รู้จบ ถ้าตั้ง
+      // dead-letter exchange ไว้ ข้อความจะตกไปที่ DLQ ให้คนมาตรวจ
       channel.nack(message, false, false);
     }
   }

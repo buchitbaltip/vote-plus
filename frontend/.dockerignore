@@ -1,0 +1,12 @@
+# ไฟล์ที่ห้ามส่งเข้า build context
+node_modules
+.next
+out
+
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+Dockerfile
+.dockerignore

@@ -1,6 +1,6 @@
 /**
- * The five candidates on the ballot. `number` must match the
- * candidateCount the Voting contract was deployed with.
+ * ผู้สมัคร 5 คนบนบัตรลงคะแนน ค่า `number` ต้องสอดคล้องกับ candidateCount
+ * ที่ใช้ตอน deploy contract Voting
  */
 export const CANDIDATE_SEED = [
   {

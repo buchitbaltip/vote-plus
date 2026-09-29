@@ -1,0 +1,14 @@
+# ไฟล์ที่ห้ามส่งเข้า build context
+# node_modules ต้องติดตั้งใหม่ใน image (binary ของ Linux คนละตัวกับ Windows)
+node_modules
+dist
+coverage
+
+# ความลับ — ห้ามอบติดเข้า image เด็ดขาด ส่งผ่าน env ตอน run แทน
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+Dockerfile
+.dockerignore

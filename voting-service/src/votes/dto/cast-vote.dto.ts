@@ -1,7 +1,7 @@
 import { IsInt, Min } from 'class-validator';
 
 export class CastVoteDto {
-  /** Database id of the candidate (from GET /candidates). */
+  /** id ของผู้สมัครในฐานข้อมูล (ได้มาจาก GET /candidates) */
   @IsInt()
   @Min(1)
   candidateId: number;

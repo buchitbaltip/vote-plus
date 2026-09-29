@@ -20,13 +20,13 @@ export class VotesController {
   constructor(private readonly votesService: VotesService) {}
 
   /**
-   * POST /votes  (auth required)
-   *  201 MyVote            ballot accepted (PENDING until mined)
-   *  400                   body failed validation
-   *  401                   no / bad token
-   *  404                   candidate does not exist
-   *  409                   this user already voted
-   *  502                   blockchain rejected the transaction
+   * POST /votes  (ต้อง login)
+   *  201 MyVote            รับบัตรลงคะแนนแล้ว (PENDING จนกว่าจะถูก mine)
+   *  400                   body ไม่ผ่าน validation
+   *  401                   ไม่มี token หรือ token ใช้ไม่ได้
+   *  404                   ไม่มีผู้สมัครคนนี้
+   *  409                   ผู้ใช้คนนี้โหวตไปแล้ว
+   *  502                   blockchain ปฏิเสธ transaction
    */
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -35,7 +35,7 @@ export class VotesController {
     return this.votesService.castVote(user.sub, dto.candidateId);
   }
 
-  /** GET /votes/me (auth required) -> 200 MyVote | null */
+  /** GET /votes/me (ต้อง login) -> 200 MyVote | null */
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {

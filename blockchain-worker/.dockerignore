@@ -1,0 +1,12 @@
+# ไฟล์ที่ห้ามส่งเข้า build context
+node_modules
+dist
+
+# ความลับ — โดยเฉพาะ private key ของ wallet ห้ามอบติดเข้า image
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+Dockerfile
+.dockerignore

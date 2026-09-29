@@ -1,15 +1,16 @@
-import {
-  BadGatewayException,
-  ConflictException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ClientProxy } from '@nestjs/microservices';
 import { Not, Repository } from 'typeorm';
 import { Observable, Subject, defer, from, merge } from 'rxjs';
 import { Vote, VoteStatus } from './vote.entity.js';
 import { CandidatesService } from '../candidates/candidates.service.js';
 import { BlockchainService } from '../blockchain/blockchain.service.js';
+import {
+  VOTE_CREATED,
+  type VoteConfirmedEvent,
+  type VoteFailedEvent,
+} from '../events/vote.events.js';
 import type {
   CandidateResult,
   LedgerEntry,
@@ -24,30 +25,33 @@ const LEDGER_SIZE = 20;
 export class VotesService {
   private readonly logger = new Logger(VotesService.name);
 
-  /** Every change to the tally pushes a fresh ResultsPayload here (SSE). */
+  /** ทุกครั้งที่คะแนนเปลี่ยน จะ push ResultsPayload ชุดใหม่ลงตรงนี้ (ใช้กับ SSE) */
   private readonly results$ = new Subject<ResultsPayload>();
 
   constructor(
     @InjectRepository(Vote) private readonly votes: Repository<Vote>,
     private readonly candidatesService: CandidatesService,
+    /** ใช้อ่านคะแนนบน chain อย่างเดียว เขียนไม่ได้ (ไม่มี private key) */
     private readonly blockchain: BlockchainService,
+    /** ช่องทางส่งงานไปให้ blockchain-worker ผ่าน RabbitMQ */
+    @Inject('VOTE_EVENTS') private readonly client: ClientProxy,
   ) {}
 
   // ---------------------------------------------------------------------
-  // Business logic: cast a ballot
+  // Business logic: ลงคะแนน
   // ---------------------------------------------------------------------
 
   /**
-   * Flow:
-   *  1. Candidate must exist                          -> 404
-   *  2. User must not have voted                      -> 409
-   *  3. INSERT vote (PENDING). UNIQUE(user_id) is the real guard against a
-   *     double-vote race.                             -> 409 on violation
-   *  4. Send vote(candidateNumber) to the contract.
-   *       - success: store txHash, return 201 immediately (status PENDING)
-   *       - failure: delete the row so the student can retry -> 502
-   *  5. In the background wait for the receipt, flip to CONFIRMED/FAILED and
-   *     broadcast the new tally to every SSE subscriber.
+   * ลำดับการทำงาน:
+   *  1. ผู้สมัครต้องมีอยู่จริง                            -> 404
+   *  2. ผู้ใช้ต้องยังไม่เคยโหวต                           -> 409
+   *  3. INSERT vote (PENDING) โดย UNIQUE(user_id) คือด่านจริงที่กันโหวตซ้ำ
+   *     กรณีที่ 2 request เข้ามาพร้อมกัน                  -> ชนแล้วตอบ 409
+   *  4. โยน event `vote.created` เข้าคิว แล้วตอบ 201 ทันที
+   *
+   * service นี้ไม่ส่ง transaction เองอีกต่อไป — blockchain-worker จะมารับงาน
+   * จากคิวไปทำ แล้วส่งผลกลับมาทาง `vote.confirmed` / `vote.failed`
+   * (ดูเมธอด applyConfirmation / applyFailure ด้านล่าง)
    */
   async castVote(userId: string, candidateId: number): Promise<MyVote> {
     const candidate = await this.candidatesService.findOne(candidateId);
@@ -56,15 +60,15 @@ export class VotesService {
       throw new ConflictException('You have already voted');
     }
 
+    // ตอนนี้ยังไม่รู้ว่า worker จะส่งขึ้น chain ได้หรือไม่ จึงตั้งเป็น PENDING
+    // ไว้ก่อนเสมอ ถ้า worker รันในโหมด OFF_CHAIN มันจะแจ้งกลับมาเอง
     let vote: Vote;
     try {
       vote = await this.votes.save(
         this.votes.create({
           user: { id: userId },
           candidate,
-          status: this.blockchain.enabled
-            ? VoteStatus.PENDING
-            : VoteStatus.OFF_CHAIN,
+          status: VoteStatus.PENDING,
         }),
       );
     } catch (err) {
@@ -74,50 +78,46 @@ export class VotesService {
       throw err;
     }
 
-    if (this.blockchain.enabled) {
-      try {
-        const submitted = await this.blockchain.castVote(candidate.number);
-        vote.txHash = submitted.txHash;
-        vote = await this.votes.save(vote);
-        void this.trackConfirmation(vote.id, submitted.confirmation);
-      } catch (err) {
-        // Chain rejected the send (out of gas, RPC down, not owner...).
-        // Roll back the DB row so the ballot is not lost.
-        await this.votes.delete({ id: vote.id });
-        this.logger.error(
-          `vote(${candidate.number}) submission failed: ${(err as Error).message}`,
-        );
-        throw new BadGatewayException(
-          'Could not submit vote to the blockchain, please try again',
-        );
-      }
-    }
+    // emit = ยิงแล้วไม่รอคำตอบ ต่างจาก send ที่เป็น request-response
+    // ตรงนี้คือจุดที่ 2 service คุยกัน และเป็นเหตุผลที่ user ไม่ต้องรอ 12 วินาที
+    this.client.emit(VOTE_CREATED, {
+      voteId: vote.id,
+      candidateNumber: candidate.number,
+    });
+    this.logger.log(
+      `ส่ง ${VOTE_CREATED} เข้าคิวแล้ว vote=${vote.id} เบอร์=${candidate.number}`,
+    );
 
     void this.broadcast();
     return this.toMyVote(vote);
   }
 
-  private async trackConfirmation(
-    voteId: string,
-    confirmation: Promise<{ blockNumber: number }>,
-  ) {
-    try {
-      const receipt = await confirmation;
-      await this.votes.update(
-        { id: voteId },
-        { status: VoteStatus.CONFIRMED, blockNumber: receipt.blockNumber },
-      );
-    } catch (err) {
-      await this.votes.update(
-        { id: voteId },
-        { status: VoteStatus.FAILED, errorMessage: (err as Error).message },
-      );
-    }
-    void this.broadcast();
+  /** worker แจ้งว่า tx ถูก mine แล้ว */
+  async applyConfirmation(event: VoteConfirmedEvent) {
+    await this.votes.update(
+      { id: event.voteId },
+      {
+        status: VoteStatus.CONFIRMED,
+        txHash: event.txHash,
+        blockNumber: event.blockNumber,
+      },
+    );
+    // คะแนนบน chain เพิ่งเปลี่ยน แคชเดิมใช้ไม่ได้แล้ว
+    this.blockchain.invalidateTallyCache();
+    await this.broadcast();
+  }
+
+  /** worker แจ้งว่าส่ง tx ไม่สำเร็จ */
+  async applyFailure(event: VoteFailedEvent) {
+    await this.votes.update(
+      { id: event.voteId },
+      { status: VoteStatus.FAILED, errorMessage: event.reason },
+    );
+    await this.broadcast();
   }
 
   // ---------------------------------------------------------------------
-  // Queries
+  // การอ่านข้อมูล
   // ---------------------------------------------------------------------
 
   async findByUser(userId: string): Promise<Vote | null> {
@@ -129,7 +129,7 @@ export class VotesService {
     return vote ? this.toMyVote(vote) : null;
   }
 
-  /** DB tally + on-chain tally + recent ledger, in one payload. */
+  /** รวมคะแนนจาก DB + คะแนนบน chain + ประวัติล่าสุด ไว้ใน payload เดียว */
   async getResults(): Promise<ResultsPayload> {
     const [candidates, counts, ledgerRows, chainVotes] = await Promise.all([
       this.candidatesService.findAll(),
@@ -164,8 +164,8 @@ export class VotesService {
   }
 
   /**
-   * SSE stream: emits the current results once on connect, then every time
-   * a vote is cast or confirmed.
+   * SSE stream: ส่งผลคะแนนปัจจุบัน 1 ครั้งทันทีที่ต่อเข้ามา
+   * หลังจากนั้นส่งทุกครั้งที่มีคนโหวตหรือมี tx ถูกยืนยัน
    */
   stream(): Observable<ResultsPayload> {
     return merge(
@@ -175,7 +175,7 @@ export class VotesService {
   }
 
   // ---------------------------------------------------------------------
-  // Helpers
+  // ฟังก์ชันช่วย
   // ---------------------------------------------------------------------
 
   private async countByCandidate(): Promise<Map<number, number>> {

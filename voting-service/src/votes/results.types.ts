@@ -7,9 +7,9 @@ export interface CandidateResult {
   name: string;
   slogan: string;
   classroom: string;
-  /** Votes counted in PostgreSQL (all statuses except FAILED). */
+  /** คะแนนที่นับจาก PostgreSQL (ทุก status ยกเว้น FAILED) */
   dbVotes: number;
-  /** Votes read from the smart contract via getVotes(); null if chain disabled/unreachable. */
+  /** คะแนนที่อ่านจาก smart contract ด้วย getVotes() เป็น null ถ้าปิด chain หรือต่อไม่ได้ */
   chainVotes: number | null;
 }
 
@@ -28,7 +28,7 @@ export interface ResultsPayload {
   totalDbVotes: number;
   totalChainVotes: number | null;
   chain: ChainInfo & { error: string | null };
-  /** Most recent ballots, newest first. No voter identity is exposed. */
+  /** บัตรลงคะแนนล่าสุด เรียงใหม่ไปเก่า ไม่เปิดเผยตัวตนผู้โหวต */
   ledger: LedgerEntry[];
   generatedAt: string;
 }
