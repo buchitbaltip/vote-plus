@@ -1,0 +1,25 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "Voting.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\n/**\n * @title Voting\n * @notice On-chain tally for a student-president election.\n *\n * Design:\n *  - Vote counts live in contract storage. Nobody (not even the owner) can\n *    set a count directly; the only way to change state is `vote()`, which\n *    can only ever *increment* a counter by one.\n *  - `vote()` is restricted to the owner (the NestJS backend wallet). The\n *    backend is responsible for authenticating the student and enforcing\n *    one-vote-per-student in PostgreSQL; the chain provides an immutable,\n *    publicly auditable tally.\n *  - `getVotes()` is a free `view` call so anyone (the backend, a browser,\n *    an interviewer on Etherscan) can read the raw tally without trusting\n *    the backend.\n */\ncontract Voting {\n    address public immutable owner;\n    uint256 public immutable candidateCount;\n\n    // candidateId (1-based) => number of votes\n    mapping(uint256 => uint256) private votes;\n    uint256 public totalVotes;\n\n    event Voted(uint256 indexed candidateId, uint256 newTotal, uint256 totalVotes);\n\n    error NotOwner();\n    error InvalidCandidate(uint256 candidateId);\n\n    modifier onlyOwner() {\n        if (msg.sender != owner) revert NotOwner();\n        _;\n    }\n\n    constructor(uint256 _candidateCount) {\n        require(_candidateCount > 0, \"candidateCount must be > 0\");\n        owner = msg.sender;\n        candidateCount = _candidateCount;\n    }\n\n    /// @notice Add one vote to `candidateId`. Called by the backend after it\n    ///         has validated the student's ballot.\n    function vote(uint256 candidateId) external onlyOwner {\n        if (candidateId == 0 || candidateId > candidateCount) {\n            revert InvalidCandidate(candidateId);\n        }\n        votes[candidateId] += 1;\n        totalVotes += 1;\n        emit Voted(candidateId, votes[candidateId], totalVotes);\n    }\n\n    /// @notice Raw tally for every candidate. Index 0 => candidate #1.\n    function getVotes() external view returns (uint256[] memory result) {\n        result = new uint256[](candidateCount);\n        for (uint256 i = 0; i < candidateCount; i++) {\n            result[i] = votes[i + 1];\n        }\n    }\n\n    /// @notice Tally for a single candidate.\n    function getVotes(uint256 candidateId) external view returns (uint256) {\n        if (candidateId == 0 || candidateId > candidateCount) {\n            revert InvalidCandidate(candidateId);\n        }\n        return votes[candidateId];\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "evmVersion": "osaka",
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "metadata"
+        ]
+      }
+    }
+  }
+}
