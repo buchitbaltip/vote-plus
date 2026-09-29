@@ -1,7 +1,7 @@
 {
-  "name": "backend",
+  "name": "voting-service",
   "version": "0.0.1",
-  "description": "",
+  "description": "Auth, candidates, ballots and live results. Publishes vote events to RabbitMQ.",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
